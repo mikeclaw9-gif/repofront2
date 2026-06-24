@@ -1,0 +1,124 @@
+import { Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { NgIf } from '@angular/common';
+
+import { ApiService } from '../../core/services/api.service';
+import { SalesService } from '../../core/services/sales.service';
+import { ServiceOrder } from '../../core/models/auth.models';
+import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+import { TableModule } from 'primeng/table';
+import { CalendarModule } from 'primeng/calendar';
+
+@Component({
+  selector: 'app-reports',
+  standalone: true,
+  imports: [FormsModule, NgIf, ButtonModule, CardModule, TableModule, CalendarModule],
+  template: `
+        <h1>Reportes de Ventas</h1>
+        <p-card header="Ventas por Rango de Fechas">
+          <div class="field">
+            <label>Desde:</label>
+            <p-calendar [(ngModel)]="startDate" dateFormat="yy-mm-dd" [showIcon]="true" styleClass="full-width"></p-calendar>
+          </div>
+          <div class="field">
+            <label>Hasta:</label>
+            <p-calendar [(ngModel)]="endDate" dateFormat="yy-mm-dd" [showIcon]="true" styleClass="full-width"></p-calendar>
+          </div>
+          <p-button label="Consultar Ventas" (onClick)="loadSalesByDateRange()" styleClass="full-width"></p-button>
+          
+          <div *ngIf="salesData && salesData.length > 0" class="report-result">
+            <p-table [value]="salesData" [paginator]="true" [rows]="10" [showCurrentPageReport]="true" 
+                    currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} ventas">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th>Servicios</th>
+                  <th>Productos</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-sale>
+                <tr>
+                  <td>{{ sale.createdAt | date:'short' }}</td>
+                  <td>{{ sale.clientName || 'Cliente General' }}</td>
+                  <td>{{ sale.totalAmount | number:'1.2-2' }}</td>
+                  <td>{{ sale.status }}</td>
+                  <td>
+                    <span *ngFor="let item of sale.items; let last = last">
+                      {{ item.serviceTypeName }}{{ !last ? ', ' : '' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span *ngFor="let product of sale.products; let last = last">
+                      {{ product.productName }} (x{{ product.quantity }}){{ !last ? ', ' : '' }}
+                    </span>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+            
+            <div *ngIf="salesData.length > 0" class="summary">
+              <h3>Resumen:</h3>
+              <p>Total Ventas: <strong>{{ totalSales | number:'1.2-2' }}</strong></p>
+              <p>Total Órdenes: <strong>{{ salesData.length }}</strong></p>
+              <p>Promedio por Orden: <strong>{{ (totalSales / salesData.length || 0) | number:'1.2-2' }}</strong></p>
+            </div>
+          </div>
+          
+          <div *ngIf="salesData && salesData.length === 0 && !loading">
+            <p class="text-center">No se encontraron ventas en el rango de fechas seleccionado.</p>
+          </div>
+          
+          <div *ngIf="loading" class="text-center">
+            <p>Cargando ventas...</p>
+          </div>
+        </p-card>
+  `,
+  styles: [`
+    .reports-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+    .field { margin-bottom: 1rem; }
+    .full-width { width: 100%; }
+    .report-result { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--surface-border); }
+    .summary { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--surface-border); }
+  `]
+})
+export class ReportsComponent {
+  private readonly api = inject(ApiService);
+  private readonly salesService = inject(SalesService);
+
+  startDate: Date = new Date();
+  endDate: Date = new Date();
+  
+  salesData: ServiceOrder[] = [];
+  loading: boolean = false;
+  totalSales: number = 0;
+
+  ngOnInit(): void {
+    // Cargar ventas de hoy por defecto
+    this.loadSalesByDateRange();
+  }
+
+  loadSalesByDateRange(): void {
+    const startStr = this.startDate.toISOString().split('T')[0];
+    const endStr = this.endDate.toISOString().split('T')[0];
+    
+    this.loading = true;
+    this.salesService.getSalesByDateRange(startStr, endStr).subscribe({
+      next: (data) => {
+        this.salesData = data;
+        this.loading = false;
+        // Calcular total de ventas
+        this.totalSales = data.reduce((sum, sale) => sum + sale.totalAmount, 0);
+      },
+      error: (error) => {
+        console.error('Error al cargar ventas:', error);
+        this.loading = false;
+        this.salesData = [];
+        this.totalSales = 0;
+      }
+    });
+  }
+}
