@@ -1,0 +1,102 @@
+pipeline {
+    agent any
+
+    // Las herramientas JDK/Maven no se usan en este pipeline, pero se mantienen por si acaso
+    tools {
+        jdk 'JDK 17'
+        maven 'Maven3'
+    }
+
+    environment {
+        // Usamos el workspace de Jenkins para evitar rutas fijas
+       // REPO_DIR = "${env.WORKSPACE}/repoback"
+        REPO_DIR = "${env.WORKSPACE}"
+        REPO_SUB = "${env.WORKSPACE}/repofront2"
+    }
+
+    stages {
+        stage('Preparación') {
+            steps {
+                sh '''
+                    # Instalar Docker CLI y docker-compose en el contenedor Alpine
+                    echo "PREPARACION"
+                '''
+            }
+        }
+
+        stage('Descarga') {
+            steps {
+                script {
+                    sh """
+                        cd ${REPO_DIR}
+                        echo "Directorio actual: \$(pwd)"
+                        ls -la
+                        if [ -d "repofront/.git" ]; then
+                            cd repofront && git fetch --all && git reset --hard origin/main
+                        else
+                            git clone https://github.com/mikeclaw9-gif/repofront2.git
+                        fi
+                    """
+                }
+            }
+        }
+
+        stage('Compilación') {
+            steps {
+                script {
+                    sh """
+                        cd ${REPO_SUB}
+                        echo "Directorio actual: \$(pwd)"
+                        echo "Lista de archivos:"
+                        ls -la
+                        echo "Usando npm"
+                        rm -rf dist/ .angular/cache/ && npm cache clean --force
+                        npm install
+                        npm run build
+                    """
+                }
+            }
+        }
+
+        stage('Construcción Imagen') {
+            steps {
+                script {
+                    sh """
+                        cd ${REPO_SUB}
+                        echo "Directorio actual: \$(pwd)"
+                        echo "Lista de archivos:"
+                        ls -la
+                        docker build -t laundry-pos-frontend .
+                    """
+                }
+            }
+        }
+
+        stage('Despliegue') {
+            steps {
+                script {
+                    sh """
+                        cd ${REPO_SUB}
+                        echo "Directorio actual: \$(pwd)"
+                        echo "Lista de archivos:"
+                        ls -la
+                        # docker compose down || true   # opcional
+                        docker compose up -d
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline ejecutado exitosamente.'
+        }
+        failure {
+            echo 'El pipeline falló. Revisa los logs.'
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
