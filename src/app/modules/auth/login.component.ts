@@ -61,7 +61,7 @@ import { NgIf, NgClass } from '@angular/common';
       text-align: center;
     }
     .status-text { font-size: 0.8rem; font-weight: 600; }
-    .status-text.ok { color: #22c55e; }
+    .status-text.ok { color: #60a5fa; }
     .status-text.ko { color: #ef4444; }
     .status-text.checking { color: var(--text-color-secondary); }
   `]
